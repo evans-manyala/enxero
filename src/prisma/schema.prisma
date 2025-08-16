@@ -1,0 +1,230 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Company {
+  id             String          @id @default(uuid())
+  name           String          @db.VarChar(255)
+  identifier     String?         @unique @db.VarChar(50)
+  fullName       String?         @db.VarChar(255)
+  shortName      String?         @db.VarChar(100)
+  workPhone      String?         @db.VarChar(20)
+  city           String?         @db.VarChar(100)
+  address        Json?
+  settings       Json?
+  isActive       Boolean         @default(true)
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  emailLogs      EmailLog[]
+  employees      Employee[]
+  forms          Form[]
+  notifications  Notification[]
+  payrollRecords PayrollRecord[]
+  users          User[]
+
+  @@map("companies")
+}
+
+model Role {
+  id          String   @id @default(uuid())
+  name        String   @unique @db.VarChar(100)
+  description String?  @db.VarChar(500)
+  permissions String[]
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  users       User[]
+
+  @@map("roles")
+}
+
+model User {
+  id               String           @id @default(uuid())
+  username         String           @unique @db.VarChar(50)
+  email            String           @unique @db.VarChar(255)
+  password         String           @db.VarChar(255)
+  firstName        String           @db.VarChar(100)
+  lastName         String           @db.VarChar(100)
+  phoneNumber      String?          @db.VarChar(20)
+  avatar           String?          @db.VarChar(255)
+  isActive         Boolean          @default(true)
+  emailVerified    Boolean          @default(false)
+  twoFactorSecret  String?          @db.VarChar(255)
+  backupCodes      String[]
+  resetToken       String?          @db.VarChar(255)
+  resetTokenExpiry DateTime?
+  lastLogin        DateTime?
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+  companyId        String
+  roleId           String?
+  employee         Employee?
+  formSubmissions  FormSubmission[]
+  createdForms     Form[]           @relation("FormCreator")
+  notifications    Notification[]
+  refreshTokens    RefreshToken[]
+  company          Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  role             Role?            @relation(fields: [roleId], references: [id])
+
+  @@map("users")
+}
+
+model RefreshToken {
+  id        String   @id @default(uuid())
+  token     String   @unique @db.VarChar(255)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("refresh_tokens")
+}
+
+model Employee {
+  id               String          @id @default(uuid())
+  employeeId       String          @db.VarChar(50)
+  firstName        String          @db.VarChar(100)
+  lastName         String          @db.VarChar(100)
+  email            String          @unique @db.VarChar(255)
+  phoneNumber      String?         @db.VarChar(20)
+  department       String          @db.VarChar(100)
+  position         String          @db.VarChar(100)
+  status           String          @db.VarChar(50)
+  hireDate         DateTime
+  terminationDate  DateTime?
+  salary           Decimal         @db.Decimal(10,2)
+  emergencyContact Json?
+  address          Json?
+  bankDetails      Json?
+  taxInfo          Json?
+  benefits         Json?
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+  companyId        String
+  userId           String?         @unique
+  managerId        String?
+  company          Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  manager          Employee?       @relation("EmployeeManager", fields: [managerId], references: [id])
+  directReports    Employee[]      @relation("EmployeeManager")
+  user             User?           @relation(fields: [userId], references: [id])
+  payrollRecords   PayrollRecord[]
+
+  @@unique([employeeId, companyId])
+  @@map("employees")
+}
+
+model Form {
+  id            String           @id @default(uuid())
+  title         String           @db.VarChar(255)
+  description   String?          @db.Text
+  category      String           @db.VarChar(50)
+  status        String           @db.VarChar(50)
+  isTemplate    Boolean          @default(false)
+  settings      Json?
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+  companyId     String
+  createdBy     String
+  fields        FormField[]
+  submissions   FormSubmission[]
+  company       Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  creator       User             @relation("FormCreator", fields: [createdBy], references: [id])
+
+  @@map("forms")
+}
+
+model FormField {
+  id         String    @id @default(uuid())
+  type       String    @db.VarChar(50)
+  label      String    @db.VarChar(255)
+  name       String    @db.VarChar(255)
+  required   Boolean   @default(false)
+  options    Json?
+  validation Json?
+  order      Int
+  formId     String
+  form       Form      @relation(fields: [formId], references: [id], onDelete: Cascade)
+
+  @@map("form_fields")
+}
+
+model FormSubmission {
+  id          String         @id @default(uuid())
+  submittedAt DateTime       @default(now())
+  formId      String
+  submittedBy String
+  responses   FormResponse[]
+  form        Form           @relation(fields: [formId], references: [id], onDelete: Cascade)
+  submitter   User           @relation(fields: [submittedBy], references: [id])
+
+  @@map("form_submissions")
+}
+
+model FormResponse {
+  id           String         @id @default(uuid())
+  fieldName    String         @db.VarChar(255)
+  value        String         @db.Text
+  submissionId String
+  submission   FormSubmission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+
+  @@map("form_responses")
+}
+
+model PayrollRecord {
+  id              String        @id @default(uuid())
+  payPeriodStart  DateTime
+  payPeriodEnd    DateTime
+  grossSalary     Decimal       @db.Decimal(10,2)
+  totalDeductions Decimal       @db.Decimal(10,2)
+  netSalary       Decimal       @db.Decimal(10,2)
+  workingDays     Int
+  deductions      Json?
+  allowances      Json?
+  status          String        @db.VarChar(50)
+  processedAt     DateTime?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  employeeId      String
+  companyId       String
+  company         Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  employee        Employee      @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@map("payroll_records")
+}
+
+model Notification {
+  id            String               @id @default(uuid())
+  title         String               @db.VarChar(255)
+  message       String               @db.Text
+  type          String               @db.VarChar(50)
+  category      String               @db.VarChar(50)
+  data          Json?
+  isRead        Boolean              @default(false)
+  readAt        DateTime?
+  createdAt     DateTime             @default(now())
+  userId        String
+  companyId     String
+  company       Company              @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  user          User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("notifications")
+}
+
+model EmailLog {
+  id        String      @id @default(uuid())
+  recipient String      @db.VarChar(255)
+  subject   String      @db.VarChar(255)
+  status    String      @db.VarChar(50)
+  messageId String?     @db.VarChar(255)
+  error     String?     @db.Text
+  sentAt    DateTime    @default(now())
+  companyId String?
+  company   Company?    @relation(fields: [companyId], references: [id])
+
+  @@map("email_logs")
+}
